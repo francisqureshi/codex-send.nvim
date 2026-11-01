@@ -8,6 +8,8 @@ M.config = {
   profile = nil,
   resume = false,
   auto_target = true,
+  accent_hl = 'Special',
+  session_icon = '֎',
 }
 
 local last_sent = {}

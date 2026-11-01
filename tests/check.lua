@@ -115,7 +115,7 @@ local ok, err = xpcall(function()
       assert(config.border == nil or config.border == 'none')
       assert(config.title == nil and config.footer == nil)
       if config.focusable == false then
-        eq(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), { ' chosen-thread' })
+        eq(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), { ' ֎ chosen-thread' })
       end
     end
   end

@@ -84,6 +84,9 @@ complete server inventory. Enter a UUID or exact name manually if missing.
 The composer fills the editor horizontally with a borderless, subtly darker
 background at the bottom, growing upward as you type. Only the session name and
 a small `❯` prompt are visible. It follows editor resizing.
+The session label has a monochrome `֎` knot-style mark. The label and chevron
+use your theme's `Special` highlight and update when the colorscheme changes.
+No emoji or icon font is required.
 
 Press **`?` in an empty prompt** (or in the prompt's Normal mode) to open help
 with keyboard shortcuts and context details. Question marks within a message
@@ -119,6 +122,8 @@ Use the lazy.nvim spec's `opts`, or pass this table to `setup()`:
   -- remote = 'unix:///path/to/server.sock',
   resume = false, -- true adds --resume to try waking the selected thread
   auto_target = true, -- false always asks you to choose unless a target is pinned
+  accent_hl = 'Special', -- theme highlight used for the session label and chevron
+  session_icon = '֎', -- text glyph; use '' to hide it
 }
 ```
 

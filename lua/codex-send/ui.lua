@@ -30,6 +30,33 @@ function M.capture_selection()
   }
 end
 
+function M.refresh_highlights()
+  -- A single quiet surface, slightly darker than the editor background.
+  local normal_hl = vim.api.nvim_get_hl(0, { name = 'Normal', link = false })
+  local float_hl = vim.api.nvim_get_hl(0, { name = 'NormalFloat', link = false })
+  local comment_hl = vim.api.nvim_get_hl(0, { name = 'Comment', link = false })
+  local accent_hl = vim.api.nvim_get_hl(0, { name = require('codex-send').config.accent_hl, link = false })
+  local base = normal_hl.bg or float_hl.bg or 0x202020
+  local function shade(channel)
+    return math.floor(channel * 0.9)
+  end
+  local background = shade(math.floor(base / 65536) % 256) * 65536 + shade(math.floor(base / 256) % 256) * 256 + shade(base % 256)
+  if background == base then
+    background = 0x080808
+  end
+  vim.api.nvim_set_hl(0, 'CodexSendPanel', { fg = normal_hl.fg, bg = background })
+  vim.api.nvim_set_hl(0, 'CodexSendMeta', { fg = comment_hl.fg or normal_hl.fg, bg = background })
+
+  vim.api.nvim_set_hl(0, 'CodexSendAccent', { fg = accent_hl.fg or normal_hl.fg, bg = background })
+end
+
+vim.api.nvim_create_autocmd('ColorScheme', {
+  group = vim.api.nvim_create_augroup('codex_send_theme', { clear = true }),
+  callback = function()
+    M.refresh_highlights()
+  end,
+})
+
 --- Open a borderless composer with contiguous metadata and input surfaces.
 --- @param opts { selection: table|nil }|nil
 function M.open(opts)
@@ -65,27 +92,16 @@ function M.open(opts)
   local top_row = bottom_row() - info_height - 1
   local col = 0
 
-  -- A single quiet surface, slightly darker than the editor background.
-  local normal_hl = vim.api.nvim_get_hl(0, { name = 'Normal', link = false })
-  local float_hl = vim.api.nvim_get_hl(0, { name = 'NormalFloat', link = false })
-  local comment_hl = vim.api.nvim_get_hl(0, { name = 'Comment', link = false })
-  local base = normal_hl.bg or float_hl.bg or 0x202020
-  local function shade(channel)
-    return math.floor(channel * 0.9)
-  end
-  local background = shade(math.floor(base / 65536) % 256) * 65536 + shade(math.floor(base / 256) % 256) * 256 + shade(base % 256)
-  if background == base then
-    background = 0x080808
-  end
-  vim.api.nvim_set_hl(0, 'CodexSendPanel', { fg = normal_hl.fg, bg = background })
-  vim.api.nvim_set_hl(0, 'CodexSendMeta', { fg = comment_hl.fg or normal_hl.fg, bg = background })
+  M.refresh_highlights()
 
   -- Metadata and input meet edge-to-edge with the same background.
   local info_buf = vim.api.nvim_create_buf(false, true)
   vim.bo[info_buf].buftype = 'nofile'
-  local info_lines = {
-    ' ' .. codex.thread_label(opts.target),
-  }
+  local function session_heading()
+    local icon = codex.config.session_icon
+    return ' ' .. (icon ~= '' and (icon .. ' ') or '') .. codex.thread_label(opts.target)
+  end
+  local info_lines = { session_heading() }
   vim.api.nvim_buf_set_lines(info_buf, 0, -1, false, info_lines)
   vim.bo[info_buf].modifiable = false
 
@@ -101,7 +117,7 @@ function M.open(opts)
     noautocmd = true,
     focusable = false,
   })
-  vim.wo[info_win].winhl = 'NormalFloat:CodexSendMeta,Normal:CodexSendMeta,EndOfBuffer:CodexSendMeta'
+  vim.wo[info_win].winhl = 'NormalFloat:CodexSendAccent,Normal:CodexSendAccent,EndOfBuffer:CodexSendPanel'
   vim.wo[info_win].winblend = 0
   vim.wo[info_win].cursorline = false
   -- Keep one display row per field so long paths/titles cannot hide metadata.
@@ -131,7 +147,7 @@ function M.open(opts)
   vim.wo[input_win].wrap = true
   vim.api.nvim_buf_set_extmark(input_buf, vim.api.nvim_create_namespace 'codex_send_chevron', 0, 0, {
     sign_text = '❯',
-    sign_hl_group = 'CodexSendMeta',
+    sign_hl_group = 'CodexSendAccent',
     priority = 100,
     right_gravity = false,
   })
@@ -349,7 +365,7 @@ function M.open(opts)
       if not closed then
         opts.target = target
         vim.bo[info_buf].modifiable = true
-        vim.api.nvim_buf_set_lines(info_buf, 0, 1, false, { ' ' .. codex.thread_label(target) })
+        vim.api.nvim_buf_set_lines(info_buf, 0, 1, false, { session_heading() })
         opts.target_cwd = nil
         vim.bo[info_buf].modifiable = false
       end
