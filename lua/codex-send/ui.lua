@@ -67,7 +67,7 @@ function M.open(opts)
     return
   end
   local width = math.max(18, math.min(72, math.floor(vim.o.columns * 0.7)))
-  local info_height = opts.target_cwd and 5 or 4
+  local info_height = opts.target_cwd and 4 or 3
   local max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 7))
   local gap = 0 -- no gap between bubbles
   local top_row = math.floor((vim.o.lines - (info_height + 2 + gap + max_input_height + 2)) / 2)
@@ -91,7 +91,6 @@ function M.open(opts)
   if opts.target_cwd then
     table.insert(info_lines, ' Session cwd: ' .. opts.target_cwd)
   end
-  table.insert(info_lines, ' Ctrl-T: change session')
   vim.api.nvim_buf_set_lines(info_buf, 0, -1, false, info_lines)
   vim.bo[info_buf].modifiable = false
 
@@ -111,7 +110,7 @@ function M.open(opts)
   })
   vim.wo[info_win].winhl = 'NormalFloat:Normal,FloatBorder:CodexSendBorder,FloatTitle:CodexSendTitle'
   vim.wo[info_win].cursorline = false
-  -- Keep one display row per field so long paths/titles cannot hide the hint.
+  -- Keep one display row per field so long paths/titles cannot hide metadata.
   vim.wo[info_win].wrap = false
 
   -- Bottom bubble: prompt input
@@ -129,8 +128,10 @@ function M.open(opts)
     col = col,
     style = 'minimal',
     border = 'rounded',
-    title = ' Enter: send | Shift-Enter: newline | Esc: cancel ',
+    title = ' Enter: send | Ctrl-T: change session ',
     title_pos = 'center',
+    footer = ' Shift-Enter: newline | Esc: cancel ',
+    footer_pos = 'center',
     zindex = 50,
     noautocmd = true,
   })
