@@ -64,8 +64,8 @@ session for Neovim's current directory in this instance, then the most recently
 active matching session. Symbolic links are resolved when comparing paths.
 Subagent and batch-execution sessions are excluded. If no directory matches, or
 metadata lookup fails, it opens the picker. Sibling directories aren't matched.
-The dialog shows the session's directory for automatic targets; review the name
-and directory, particularly when several conversations share a broad parent.
+The help splash shows the session's directory for automatic targets; review the
+name and directory, particularly when conversations share a broad parent.
 
 Choosing a thread with the picker or `:CodexTarget` pins it until you run
 `:CodexTarget auto` or restart Neovim. Automatic targets are recalculated each
@@ -81,11 +81,16 @@ The picker reads the local
 updated first. This lists **saved threads**, not only live ones; it is not a
 complete server inventory. Enter a UUID or exact name manually if missing.
 
-The composer uses a borderless, subtly darker background at the bottom of the
-editor and grows upward as you type, keeping the code above visible. Session
-details and shortcuts share the same surface. It follows editor resizing.
-The dialog shows the session name (falling back to its ID when unavailable) and
-source file. **Ctrl-T changes the target session inside the dialog**, preserving
+The composer fills the editor horizontally with a borderless, subtly darker
+background at the bottom, growing upward as you type. Only the session name and
+a small `❯` prompt are visible. It follows editor resizing.
+
+Press **`?` in an empty prompt** (or in the prompt's Normal mode) to open help
+with keyboard shortcuts and context details. Question marks within a message
+remain literal. Escape returns from help to the same draft. File references,
+selections, and the buffer toggle still work; their details are shown in help.
+
+**Ctrl-T changes the target session inside the dialog**, preserving
 your prompt, selection, and buffer toggle. Canceling the picker keeps the previous
 target. A manual choice pins the session; use `:CodexTarget auto` to unpin it.
 You can also choose a session before opening the dialog with `<leader>ct` or

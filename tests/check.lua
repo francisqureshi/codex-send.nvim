@@ -99,34 +99,43 @@ local ok, err = xpcall(function()
   eq(selection.text, 'local')
   eq(selection.file, tmp .. '/source.lua')
 
-  -- Long metadata and shortcuts stay visible on a shared borderless surface.
+  -- The full-width composer shows only the session and editable prompt.
   ui.open {
     target = 'chosen-thread',
     target_cwd = tmp,
     source = { buf = vim.api.nvim_get_current_buf(), file = string.rep('a', 200), ft = 'lua', lines = { '' } },
   }
-  vim.cmd 'redraw'
-  local metadata_visible, shortcuts_visible = false, false
+  local prompt_buf = vim.api.nvim_get_current_buf()
+  local prompt_win = vim.api.nvim_get_current_win()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local config = vim.api.nvim_win_get_config(win)
-    if config.focusable == false then
-      local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
-      for row, line in ipairs(lines) do
-        if line == ' Enter: send | Ctrl-T: change session' then
-          shortcuts_visible = vim.fn.screenpos(win, row, 1).row > 0
-        end
-        if line == ' Session cwd: ' .. tmp then
-          metadata_visible = vim.fn.screenpos(win, row, 1).row > 0
-        end
+    if config.relative ~= '' then
+      eq(config.width, vim.o.columns)
+      eq(config.col, 0)
+      assert(config.border == nil or config.border == 'none')
+      assert(config.title == nil and config.footer == nil)
+      if config.focusable == false then
+        eq(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), { ' chosen-thread' })
       end
-      assert(config.border == nil or config.border == 'none', 'Metadata should be borderless')
-    elseif vim.bo[vim.api.nvim_win_get_buf(win)].filetype == 'codex-send-prompt' then
-      assert(config.title == nil and config.footer == nil, 'Input should have no chrome')
-      assert(config.border == nil or config.border == 'none', 'Input should be borderless')
     end
   end
-  assert(metadata_visible, 'Long file path hides session metadata')
-  assert(shortcuts_visible, 'Composer must show session shortcut')
+  local marks = vim.api.nvim_buf_get_extmarks(prompt_buf, vim.api.nvim_create_namespace 'codex_send_chevron', 0, -1, { details = true })
+  eq(marks[1][4].sign_text, '❯ ')
+  local config = vim.api.nvim_win_get_config(prompt_win)
+  eq(config.row + config.height, vim.o.lines - vim.o.cmdheight - (vim.o.laststatus > 0 and 1 or 0))
+
+  -- Help is a separate splash, and returning keeps the exact draft buffer.
+  key '?'
+  wait_for(function()
+    return vim.bo.filetype == 'codex-send-help'
+  end)
+  local help = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n')
+  assert(help:find('Ctrl-T', 1, true))
+  assert(help:find('Session cwd: ' .. tmp, 1, true))
+  key '<Esc>'
+  eq(vim.api.nvim_get_current_buf(), prompt_buf)
+  vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { 'A question' })
+  eq(key '?', '?') -- ordinary question marks in a message remain literal
   key '<Esc>'
 
   -- A dialog pins its target, even if the global target changes before submit.

@@ -51,29 +51,19 @@ function M.open(opts)
   local source_buf = source.buf
   local buf_lines = source.lines
 
-  -- Build info lines
-  local file_info = 'File: ' .. (file ~= '' and file or '(no file)')
-  local context_info
-  if selection then
-    local n = select(2, selection.text:gsub('\n', '')) + 1
-    context_info = string.format('Selection: %d lines (%d-%d)', n, selection.start_line, selection.end_line)
-  else
-    context_info = 'Send buffer: [ ] (Tab to toggle)'
-  end
-
   -- Layout
   if vim.o.lines < 12 or vim.o.columns < 20 then
     vim.notify('Enlarge the editor to open the Codex prompt', vim.log.levels.WARN)
     return
   end
-  local width = math.max(18, math.min(72, math.floor(vim.o.columns * 0.7)))
-  local info_height = opts.target_cwd and 6 or 5
+  local width = vim.o.columns
+  local info_height = 1
   local max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 3))
   local function bottom_row()
     return vim.o.lines - vim.o.cmdheight - (vim.o.laststatus > 0 and 1 or 0)
   end
   local top_row = bottom_row() - info_height - 1
-  local col = math.floor((vim.o.columns - width) / 2)
+  local col = 0
 
   -- A single quiet surface, slightly darker than the editor background.
   local normal_hl = vim.api.nvim_get_hl(0, { name = 'Normal', link = false })
@@ -94,15 +84,8 @@ function M.open(opts)
   local info_buf = vim.api.nvim_create_buf(false, true)
   vim.bo[info_buf].buftype = 'nofile'
   local info_lines = {
-    ' Thread: ' .. codex.thread_label(opts.target),
-    ' ' .. file_info,
-    ' ' .. context_info,
+    ' ' .. codex.thread_label(opts.target),
   }
-  if opts.target_cwd then
-    table.insert(info_lines, ' Session cwd: ' .. opts.target_cwd)
-  end
-  table.insert(info_lines, ' Enter: send | Ctrl-T: change session')
-  table.insert(info_lines, '')
   vim.api.nvim_buf_set_lines(info_buf, 0, -1, false, info_lines)
   vim.bo[info_buf].modifiable = false
 
@@ -146,14 +129,19 @@ function M.open(opts)
   vim.wo[input_win].winblend = 0
   vim.wo[input_win].signcolumn = 'yes:1'
   vim.wo[input_win].wrap = true
+  vim.api.nvim_buf_set_extmark(input_buf, vim.api.nvim_create_namespace 'codex_send_chevron', 0, 0, {
+    sign_text = '❯',
+    sign_hl_group = 'CodexSendMeta',
+    priority = 100,
+    right_gravity = false,
+  })
 
   -- Resize the input window to fit content (1..max_input_height rows)
   local function resize_input()
     if not vim.api.nvim_win_is_valid(input_win) then
       return
     end
-    width = math.max(1, math.min(72, math.floor(vim.o.columns * 0.7)))
-    col = math.max(0, math.floor((vim.o.columns - width) / 2))
+    width = vim.o.columns
     max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 3))
     local lines = vim.api.nvim_buf_get_lines(input_buf, 0, -1, false)
     -- Count visual rows (each buffer line may wrap across multiple display rows)
@@ -211,17 +199,6 @@ function M.open(opts)
     pcall(vim.api.nvim_buf_delete, info_buf, { force = true })
   end
 
-  local function update_context()
-    if selection then
-      return
-    end
-    local marker = send_buffer and '[x]' or '[ ]'
-    local line = ' Send buffer: ' .. marker .. ' (Tab to toggle)'
-    vim.bo[info_buf].modifiable = true
-    vim.api.nvim_buf_set_lines(info_buf, 2, 3, false, { line })
-    vim.bo[info_buf].modifiable = false
-  end
-
   local function send()
     if sending or picking then
       return
@@ -275,6 +252,85 @@ function M.open(opts)
 
   local kopts = { buffer = input_buf, noremap = true, silent = true }
 
+  local function show_help()
+    if closed or sending or picking then
+      return
+    end
+    picking = true
+    vim.cmd 'noautocmd stopinsert'
+    local help_buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[help_buf].filetype = 'codex-send-help'
+    local context = selection and 'Selection attached'
+      or (send_buffer and 'Full buffer attached' or (file ~= '' and 'File reference attached' or 'Prompt only'))
+    local lines = {
+      ' Codex',
+      '',
+      ' Enter / Ctrl-S   Send',
+      ' Shift-Enter      New line',
+      ' Ctrl-T           Choose session',
+      selection and ' Tab              Selection attached (buffer toggle disabled)' or ' Tab              Toggle full buffer',
+      ' Esc / Ctrl-C     Cancel',
+      ' ?                Help (empty prompt or Normal mode)',
+      '',
+      ' Session: ' .. codex.thread_label(opts.target),
+      ' File: ' .. (file ~= '' and file or '(unnamed buffer)'),
+      ' Context: ' .. context,
+      ' Session cwd: ' .. (opts.target_cwd or '(manually selected)'),
+      '',
+      ' Esc / Enter / q  Return to prompt',
+    }
+    vim.api.nvim_buf_set_lines(help_buf, 0, -1, false, lines)
+    vim.bo[help_buf].modifiable = false
+    local help_width = math.min(60, vim.o.columns - 4)
+    local help_height = math.min(#lines, vim.o.lines - 4)
+    local help_win = vim.api.nvim_open_win(help_buf, true, {
+      relative = 'editor',
+      style = 'minimal',
+      border = 'none',
+      zindex = 60,
+      width = help_width,
+      height = help_height,
+      row = math.max(0, math.floor((vim.o.lines - help_height) / 2)),
+      col = math.max(0, math.floor((vim.o.columns - help_width) / 2)),
+    })
+    vim.wo[help_win].winhl = 'NormalFloat:CodexSendPanel,Normal:CodexSendPanel,EndOfBuffer:CodexSendPanel'
+    vim.wo[help_win].wrap = false
+    local dismissed = false
+    local function dismiss()
+      if dismissed then
+        return
+      end
+      dismissed = true
+      pcall(vim.api.nvim_win_close, help_win, true)
+      pcall(vim.api.nvim_buf_delete, help_buf, { force = true })
+      picking = false
+      if not closed and vim.api.nvim_win_is_valid(input_win) then
+        vim.api.nvim_set_current_win(input_win)
+        vim.cmd 'noautocmd startinsert!'
+      end
+    end
+    for _, key in ipairs { '<Esc>', '<C-c>', '<CR>', 'q', '?' } do
+      vim.keymap.set('n', key, dismiss, { buffer = help_buf, silent = true })
+    end
+    vim.api.nvim_create_autocmd('BufLeave', {
+      buffer = help_buf,
+      once = true,
+      callback = function()
+        vim.schedule(dismiss)
+      end,
+    })
+  end
+
+  vim.keymap.set('n', '?', show_help, kopts)
+  vim.keymap.set('i', '?', function()
+    local text = table.concat(vim.api.nvim_buf_get_lines(input_buf, 0, -1, false), '\n')
+    if text == '' then
+      vim.schedule(show_help)
+      return ''
+    end
+    return '?'
+  end, { buffer = input_buf, silent = true, expr = true })
+
   vim.keymap.set({ 'i', 'n' }, '<C-t>', function()
     if sending or picking then
       return
@@ -293,10 +349,8 @@ function M.open(opts)
       if not closed then
         opts.target = target
         vim.bo[info_buf].modifiable = true
-        vim.api.nvim_buf_set_lines(info_buf, 0, 1, false, { ' Thread: ' .. codex.thread_label(target) })
-        if opts.target_cwd then
-          vim.api.nvim_buf_set_lines(info_buf, 3, 4, false, { ' Target pinned manually' })
-        end
+        vim.api.nvim_buf_set_lines(info_buf, 0, 1, false, { ' ' .. codex.thread_label(target) })
+        opts.target_cwd = nil
         vim.bo[info_buf].modifiable = false
       end
       restore()
@@ -311,7 +365,6 @@ function M.open(opts)
   vim.keymap.set({ 'i', 'n' }, '<Tab>', function()
     if not selection and not sending then
       send_buffer = not send_buffer
-      update_context()
     end
   end, kopts)
 
