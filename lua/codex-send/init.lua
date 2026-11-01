@@ -156,15 +156,7 @@ function M.select_thread(callback, on_cancel)
     end)
     local items = { { manual = true } }
     vim.list_extend(items, sessions)
-    vim.ui.select(items, {
-      prompt = 'Codex sessions · grouped by directory · search name or cwd:',
-      format_item = function(item)
-        if item.manual then
-          return 'Enter session name or UUID…'
-        end
-        return string.format('%s  ·  %s', item.cwd or '(cwd unavailable)', item.thread_name or '(untitled)')
-      end,
-    }, function(item)
+    require('codex-send.picker').show(items, function(item)
       if not item then
         if on_cancel then
           on_cancel()

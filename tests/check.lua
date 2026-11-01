@@ -25,6 +25,18 @@ local function key(lhs)
 end
 
 local ok, err = xpcall(function()
+  local session_picker = require 'codex-send.picker'
+  local long_path = '/hidden-prefix/' .. string.rep('directory/', 10) .. 'my-project'
+  local shortened = session_picker.path_label(long_path, 24)
+  assert(vim.fn.strdisplaywidth(shortened) <= 24)
+  assert(shortened:find('my-project', 1, true))
+  assert(shortened:find('…', 1, true))
+  for _, limit in ipairs { 1, 8, 16, 40 } do
+    local label = session_picker.path_label('/路径/非常长的项目名称', limit)
+    assert(vim.fn.strdisplaywidth(label) <= limit)
+  end
+  assert(session_picker.search_text({ cwd = long_path, thread_name = 'Example' }):find('/hidden-prefix/', 1, true))
+
   -- Real subprocess boundary: shell syntax and multiline Unicode stay literal.
   local fake = tmp .. '/fake.py'
   vim.fn.writefile({

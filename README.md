@@ -78,9 +78,12 @@ a model turn. Remote targets use manual selection.
 
 The selector fetches all pages of non-archived session metadata through
 `codex app-server`. Entries show **cwd · session name**, grouped by directory
-and ordered by recent activity within each group. The full directory path and
-session name are both part of the picker text, so searchable `vim.ui.select`
-providers (including Telescope UI Select) can filter on either. UUIDs are kept
+and ordered by recent activity within each group. With Telescope UI Select,
+long paths lose their leading breadcrumbs (`…/Projects/my-project`) and occupy
+at most 60% of the available picker width, leaving space for the session name.
+The full original cwd and session name remain searchable, including hidden
+path prefixes. Other `vim.ui.select` providers keep full labels for searching.
+UUIDs are kept
 internally for precise targeting and aren't displayed in session entries.
 
 Names are supplemented from `$CODEX_HOME/session_index.jsonl` (default
