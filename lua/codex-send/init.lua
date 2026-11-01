@@ -78,9 +78,23 @@ function M.resolve_target(callback)
     end
     local candidates = {}
     if not err then
-      local real = vim.uv.fs_realpath(cwd) or vim.fs.normalize(cwd)
+      local function canonical(path)
+        return vim.uv.fs_realpath(path) or vim.fs.normalize(path)
+      end
+      local ranks = { [canonical(cwd)] = 1 }
+      local rank = 1
+      for parent in vim.fs.parents(cwd) do
+        rank = rank + 1
+        ranks[canonical(parent)] = rank
+      end
+      local best_rank = math.huge
       for _, session in ipairs(sessions or {}) do
-        if type(session.id) == 'string' and type(session.cwd) == 'string' and (vim.uv.fs_realpath(session.cwd) or vim.fs.normalize(session.cwd)) == real then
+        local session_rank = type(session.cwd) == 'string' and ranks[canonical(session.cwd)] or nil
+        if type(session.id) == 'string' and session_rank and session_rank <= best_rank then
+          if session_rank < best_rank then
+            candidates = {}
+            best_rank = session_rank
+          end
           table.insert(candidates, session)
           if type(session.name) == 'string' and vim.trim(session.name) ~= '' then
             thread_names[session.id] = session.name
@@ -92,14 +106,14 @@ function M.resolve_target(callback)
       M.select_thread(callback)
       return
     end
-    local target = candidates[1].id
+    local chosen = candidates[1]
     for _, session in ipairs(candidates) do
       if session.id == last_sent[cwd] then
-        target = session.id
+        chosen = session
         break
       end
     end
-    callback(target)
+    callback(chosen.id, { cwd = chosen.cwd })
   end)
 end
 
@@ -199,8 +213,8 @@ function M.open(selection)
     ft = vim.bo.filetype,
     lines = vim.api.nvim_buf_get_lines(0, 0, -1, false),
   }
-  local function open(target)
-    require('codex-send.ui').open { selection = selection, target = target, source = source }
+  local function open(target, match)
+    require('codex-send.ui').open { selection = selection, target = target, source = source, target_cwd = match and match.cwd }
   end
   M.resolve_target(open)
 end

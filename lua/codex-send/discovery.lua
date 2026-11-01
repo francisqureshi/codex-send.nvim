@@ -29,10 +29,36 @@ function M.list(config, cwd, callback)
       finish(tostring(err))
     end
   end
-  local paths = { cwd }
-  local real = vim.uv.fs_realpath(cwd)
-  if real and real ~= cwd then
-    table.insert(paths, real)
+  local directories = { cwd }
+  for parent in vim.fs.parents(cwd) do
+    table.insert(directories, parent)
+  end
+  local directory_index = 0
+  local function request_next()
+    directory_index = directory_index + 1
+    local directory = directories[directory_index]
+    if not directory then
+      finish(nil, {})
+      return
+    end
+    local paths = { directory }
+    local real = vim.uv.fs_realpath(directory)
+    if real and real ~= directory then
+      table.insert(paths, real)
+    end
+    write {
+      id = 2,
+      method = 'thread/list',
+      params = {
+        cwd = paths,
+        limit = 50,
+        sortKey = 'recency_at',
+        sortDirection = 'desc',
+        archived = false,
+        useStateDbOnly = true,
+        sourceKinds = { 'cli', 'vscode', 'appServer', 'unknown' },
+      },
+    }
   end
   local function receive(line)
     local ok, response = pcall(vim.json.decode, line)
@@ -48,21 +74,13 @@ function M.list(config, cwd, callback)
     end
     if response.id == 1 then
       write { method = 'initialized' }
-      write {
-        id = 2,
-        method = 'thread/list',
-        params = {
-          cwd = paths,
-          limit = 50,
-          sortKey = 'recency_at',
-          sortDirection = 'desc',
-          archived = false,
-          useStateDbOnly = true,
-          sourceKinds = { 'cli', 'vscode', 'appServer', 'unknown' },
-        },
-      }
+      request_next()
     elseif type(response.result) == 'table' and type(response.result.data) == 'table' then
-      finish(nil, response.result.data)
+      if #response.result.data > 0 then
+        finish(nil, response.result.data)
+      else
+        request_next()
+      end
     else
       finish 'Invalid thread list'
     end

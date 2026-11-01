@@ -54,18 +54,25 @@ Codex plugins, so enable only one provider for that command.
 | `:CodexTarget auto` | Clear a pinned target and return to automatic selection |
 
 By default, the plugin queries Codex's app-server for non-archived conversations
-whose working directory exactly matches Neovim's current directory (`:pwd`).
-It prefers the last successfully used session for that directory in this Neovim
-instance, then the most recently active matching session. Symbolic links are
-resolved when comparing paths. Subagent and batch-execution sessions are excluded.
-If no match is found, or metadata lookup fails, it opens the picker. It never
-automatically falls back to a conversation in another project.
+whose working directory matches Neovim's current directory (`:pwd`). It tries
+the exact directory first, then each parent, stopping at the nearest directory
+with sessions. This handles Codex launched from `~/` while Neovim is editing
+`~/Projects/my-project`.
+
+Within the nearest matching directory, it prefers the last successfully used
+session for Neovim's current directory in this instance, then the most recently
+active matching session. Symbolic links are resolved when comparing paths.
+Subagent and batch-execution sessions are excluded. If no directory matches, or
+metadata lookup fails, it opens the picker. Sibling directories aren't matched.
+The dialog shows the session's directory for automatic targets; review the name
+and directory, particularly when several conversations share a broad parent.
 
 Choosing a thread with the picker or `:CodexTarget` pins it until you run
 `:CodexTarget auto` or restart Neovim. Automatic targets are recalculated each
-time the dialog opens, and stay fixed while you compose the prompt. An exact
+time the dialog opens, and stay fixed while you compose the prompt. A
 directory match is a heuristic, not a guarantee that a conversation is live.
-Automatic lookup examines up to 50 recent matching conversations and uses
+Automatic lookup examines up to 50 recent conversations in the nearest matching
+directory and uses
 `codex app-server` to read metadata only; it never resumes a thread or starts
 a model turn. Remote targets use manual selection.
 

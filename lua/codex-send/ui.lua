@@ -66,8 +66,8 @@ function M.open(opts)
     return
   end
   local width = math.max(18, math.min(72, math.floor(vim.o.columns * 0.7)))
-  local info_height = 3
-  local max_input_height = math.min(6, vim.o.lines - 10)
+  local info_height = opts.target_cwd and 4 or 3
+  local max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 7))
   local gap = 0 -- no gap between bubbles
   local top_row = math.floor((vim.o.lines - (info_height + 2 + gap + max_input_height + 2)) / 2)
   local col = math.floor((vim.o.columns - width - 2) / 2)
@@ -82,11 +82,15 @@ function M.open(opts)
   -- Top bubble: info
   local info_buf = vim.api.nvim_create_buf(false, true)
   vim.bo[info_buf].buftype = 'nofile'
-  vim.api.nvim_buf_set_lines(info_buf, 0, -1, false, {
+  local info_lines = {
     ' Thread: ' .. codex.thread_label(opts.target),
     ' ' .. file_info,
     ' ' .. context_info,
-  })
+  }
+  if opts.target_cwd then
+    table.insert(info_lines, ' Session cwd: ' .. opts.target_cwd)
+  end
+  vim.api.nvim_buf_set_lines(info_buf, 0, -1, false, info_lines)
   vim.bo[info_buf].modifiable = false
 
   local info_win = vim.api.nvim_open_win(info_buf, false, {

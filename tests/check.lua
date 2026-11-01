@@ -37,7 +37,9 @@ local ok, err = xpcall(function()
     '        elif request["method"] == "thread/list":',
     '            assert request["params"]["archived"] is False',
     '            assert request["params"]["sortKey"] == "recency_at"',
-    '            reply = {"id": 2, "result": {"data": json.loads(pathlib.Path(__file__).with_suffix(".sessions.json").read_text())}}',
+    '            sessions = json.loads(pathlib.Path(__file__).with_suffix(".sessions.json").read_text())',
+    '            matches = [s for s in sessions if s["cwd"] in request["params"]["cwd"]]',
+    '            reply = {"id": 2, "result": {"data": matches}}',
     '        else:',
     '            assert request["method"] == "initialized"',
     '            continue',
@@ -136,13 +138,14 @@ local ok, err = xpcall(function()
   argv = vim.json.decode(table.concat(vim.fn.readfile(tmp .. '/fake.json'), '\n'))
   assert(argv[5]:find('local value = 42\nprint(value)', 1, true))
 
-  -- Real discovery protocol; only exact directory matches can become targets.
+  -- Real discovery protocol; exact directory matches win over ancestors.
   local cwd = vim.fn.getcwd()
   local other = tmp .. '/other'
   vim.fn.mkdir(other, 'p')
   vim.fn.writefile({
     vim.json.encode {
       { id = 'wrong-directory', cwd = cwd .. '-sibling', name = 'Wrong project' },
+      { id = 'broader-project', cwd = vim.fs.dirname(cwd), name = 'Parent should lose to exact' },
       { id = 'other-directory', cwd = other, name = 'Other project' },
       { id = 'auto-new', cwd = cwd, name = 'Recent project session' },
       { id = 'auto-old', cwd = cwd, name = 'Older project session' },
@@ -181,6 +184,28 @@ local ok, err = xpcall(function()
   eq(resolve(), 'explicit-choice')
   vim.cmd 'CodexTarget auto'
   eq(resolve(), 'auto-old')
+
+  -- A Codex session can be rooted above the project Neovim is editing.
+  local parent = vim.fs.dirname(cwd)
+  vim.fn.writefile({
+    vim.json.encode {
+      { id = 'distant-ancestor', cwd = vim.fs.dirname(parent), name = 'Distant ancestor' },
+      { id = 'parent-session', cwd = parent, name = 'Parent directory session' },
+    },
+  }, tmp .. '/fake.sessions.json')
+  local fallback, parent_target = false, nil
+  vim.ui.select = function(_, _, callback)
+    fallback = true
+    callback(nil)
+  end
+  codex.resolve_target(function(target)
+    parent_target = target
+  end)
+  wait_for(function()
+    return fallback or parent_target ~= nil
+  end)
+  eq(parent_target, 'parent-session')
+  vim.ui.select = select
 
   -- With no cwd match (or discovery failure), use the picker, never global latest.
   local picked = 0
