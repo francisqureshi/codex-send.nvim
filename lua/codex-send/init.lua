@@ -39,6 +39,20 @@ function M.sessions()
   return sessions
 end
 
+function M.thread_label(target)
+  if not target then
+    return '?'
+  end
+  if not M.config.remote then
+    for _, session in ipairs(M.sessions()) do
+      if session.id == target and type(session.thread_name) == 'string' and vim.trim(session.thread_name) ~= '' then
+        return session.thread_name
+      end
+    end
+  end
+  return target
+end
+
 function M.select_thread(callback)
   local items = { { manual = true } }
   if not M.config.remote then

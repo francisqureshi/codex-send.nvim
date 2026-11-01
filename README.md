@@ -58,7 +58,8 @@ instance. No thread is chosen automatically. The picker reads the local
 updated first. This lists **saved threads**, not only live ones; it is not a
 complete server inventory. Enter a UUID or exact name manually if missing.
 
-The dialog shows the target and source file. Enter or Ctrl-S queues the prompt;
+The dialog shows the session name (falling back to its ID when unavailable) and
+source file. Enter or Ctrl-S queues the prompt;
 Shift-Enter inserts a newline when supported by your terminal. Tab toggles sending
 the entire buffer, including unsaved edits. Visual selections include the exact
 selected text with absolute file path and line numbers. Escape cancels. Failed

@@ -83,7 +83,7 @@ function M.open(opts)
   local info_buf = vim.api.nvim_create_buf(false, true)
   vim.bo[info_buf].buftype = 'nofile'
   vim.api.nvim_buf_set_lines(info_buf, 0, -1, false, {
-    ' Thread: ' .. (opts.target or '?'),
+    ' Thread: ' .. codex.thread_label(opts.target),
     ' ' .. file_info,
     ' ' .. context_info,
   })
