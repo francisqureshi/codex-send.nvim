@@ -99,7 +99,7 @@ local ok, err = xpcall(function()
   eq(selection.text, 'local')
   eq(selection.file, tmp .. '/source.lua')
 
-  -- Long metadata stays visible, and shortcuts are grouped on the prompt border.
+  -- Long metadata and shortcuts stay visible on a shared borderless surface.
   ui.open {
     target = 'chosen-thread',
     target_cwd = tmp,
@@ -112,16 +112,21 @@ local ok, err = xpcall(function()
     if config.focusable == false then
       local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
       for row, line in ipairs(lines) do
+        if line == ' Enter: send | Ctrl-T: change session' then
+          shortcuts_visible = vim.fn.screenpos(win, row, 1).row > 0
+        end
         if line == ' Session cwd: ' .. tmp then
           metadata_visible = vim.fn.screenpos(win, row, 1).row > 0
         end
       end
+      assert(config.border == nil or config.border == 'none', 'Metadata should be borderless')
     elseif vim.bo[vim.api.nvim_win_get_buf(win)].filetype == 'codex-send-prompt' then
-      shortcuts_visible = vim.inspect(config.title):find 'Ctrl%-T: change session' ~= nil and config.footer == nil
+      assert(config.title == nil and config.footer == nil, 'Input should have no chrome')
+      assert(config.border == nil or config.border == 'none', 'Input should be borderless')
     end
   end
   assert(metadata_visible, 'Long file path hides session metadata')
-  assert(shortcuts_visible, 'Prompt border must show session shortcut without a footer')
+  assert(shortcuts_visible, 'Composer must show session shortcut')
   key '<Esc>'
 
   -- A dialog pins its target, even if the global target changes before submit.

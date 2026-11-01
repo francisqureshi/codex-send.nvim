@@ -30,7 +30,7 @@ function M.capture_selection()
   }
 end
 
---- Open the Codex send dialog as two floating windows.
+--- Open a borderless composer with contiguous metadata and input surfaces.
 --- @param opts { selection: table|nil }|nil
 function M.open(opts)
   opts = opts or {}
@@ -67,23 +67,30 @@ function M.open(opts)
     return
   end
   local width = math.max(18, math.min(72, math.floor(vim.o.columns * 0.7)))
-  local info_height = opts.target_cwd and 4 or 3
-  local max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 7))
-  local gap = 0 -- no gap between bubbles
+  local info_height = opts.target_cwd and 6 or 5
+  local max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 3))
   local function bottom_row()
     return vim.o.lines - vim.o.cmdheight - (vim.o.laststatus > 0 and 1 or 0)
   end
-  local top_row = bottom_row() - (info_height + 2 + gap + 1 + 2)
-  local col = math.floor((vim.o.columns - width - 2) / 2)
+  local top_row = bottom_row() - info_height - 1
+  local col = math.floor((vim.o.columns - width) / 2)
 
-  -- Accent highlights
-  local accent_hl = vim.api.nvim_get_hl(0, { name = 'Function', link = false })
+  -- A single quiet surface, slightly darker than the editor background.
   local normal_hl = vim.api.nvim_get_hl(0, { name = 'Normal', link = false })
-  local accent_fg = accent_hl.fg
-  vim.api.nvim_set_hl(0, 'CodexSendBorder', { fg = accent_fg, bg = normal_hl.bg })
-  vim.api.nvim_set_hl(0, 'CodexSendTitle', { fg = accent_fg, bg = normal_hl.bg })
+  local float_hl = vim.api.nvim_get_hl(0, { name = 'NormalFloat', link = false })
+  local comment_hl = vim.api.nvim_get_hl(0, { name = 'Comment', link = false })
+  local base = normal_hl.bg or float_hl.bg or 0x202020
+  local function shade(channel)
+    return math.floor(channel * 0.9)
+  end
+  local background = shade(math.floor(base / 65536) % 256) * 65536 + shade(math.floor(base / 256) % 256) * 256 + shade(base % 256)
+  if background == base then
+    background = 0x080808
+  end
+  vim.api.nvim_set_hl(0, 'CodexSendPanel', { fg = normal_hl.fg, bg = background })
+  vim.api.nvim_set_hl(0, 'CodexSendMeta', { fg = comment_hl.fg or normal_hl.fg, bg = background })
 
-  -- Top bubble: info
+  -- Metadata and input meet edge-to-edge with the same background.
   local info_buf = vim.api.nvim_create_buf(false, true)
   vim.bo[info_buf].buftype = 'nofile'
   local info_lines = {
@@ -94,6 +101,8 @@ function M.open(opts)
   if opts.target_cwd then
     table.insert(info_lines, ' Session cwd: ' .. opts.target_cwd)
   end
+  table.insert(info_lines, ' Enter: send | Ctrl-T: change session')
+  table.insert(info_lines, '')
   vim.api.nvim_buf_set_lines(info_buf, 0, -1, false, info_lines)
   vim.bo[info_buf].modifiable = false
 
@@ -104,25 +113,24 @@ function M.open(opts)
     row = top_row,
     col = col,
     style = 'minimal',
-    border = 'rounded',
-    title = ' Codex ',
-    title_pos = 'center',
+    border = 'none',
     zindex = 50,
     noautocmd = true,
     focusable = false,
   })
-  vim.wo[info_win].winhl = 'NormalFloat:Normal,FloatBorder:CodexSendBorder,FloatTitle:CodexSendTitle'
+  vim.wo[info_win].winhl = 'NormalFloat:CodexSendMeta,Normal:CodexSendMeta,EndOfBuffer:CodexSendMeta'
+  vim.wo[info_win].winblend = 0
   vim.wo[info_win].cursorline = false
   -- Keep one display row per field so long paths/titles cannot hide metadata.
   vim.wo[info_win].wrap = false
 
-  -- Bottom bubble: prompt input
+  -- Editable message, without window chrome.
   local input_buf = vim.api.nvim_create_buf(false, true)
   vim.bo[input_buf].buftype = 'nofile'
   vim.bo[input_buf].filetype = 'codex-send-prompt'
   vim.api.nvim_buf_set_lines(input_buf, 0, -1, false, { '' })
 
-  local input_row = top_row + info_height + 2 + gap -- +2 for info border
+  local input_row = top_row + info_height
   local input_win = vim.api.nvim_open_win(input_buf, true, {
     relative = 'editor',
     width = width,
@@ -130,13 +138,13 @@ function M.open(opts)
     row = input_row,
     col = col,
     style = 'minimal',
-    border = 'rounded',
-    title = ' Enter: send | Ctrl-T: change session ',
-    title_pos = 'center',
+    border = 'none',
     zindex = 50,
     noautocmd = true,
   })
-  vim.wo[input_win].winhl = 'NormalFloat:Normal,FloatBorder:CodexSendBorder,FloatTitle:CodexSendTitle'
+  vim.wo[input_win].winhl = 'NormalFloat:CodexSendPanel,Normal:CodexSendPanel,EndOfBuffer:CodexSendPanel,SignColumn:CodexSendPanel'
+  vim.wo[input_win].winblend = 0
+  vim.wo[input_win].signcolumn = 'yes:1'
   vim.wo[input_win].wrap = true
 
   -- Resize the input window to fit content (1..max_input_height rows)
@@ -145,22 +153,22 @@ function M.open(opts)
       return
     end
     width = math.max(1, math.min(72, math.floor(vim.o.columns * 0.7)))
-    col = math.max(0, math.floor((vim.o.columns - width - 2) / 2))
-    max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 7))
+    col = math.max(0, math.floor((vim.o.columns - width) / 2))
+    max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 3))
     local lines = vim.api.nvim_buf_get_lines(input_buf, 0, -1, false)
     -- Count visual rows (each buffer line may wrap across multiple display rows)
     local visual_rows = 0
     for _, line in ipairs(lines) do
       -- A blank line still takes 1 row
-      visual_rows = visual_rows + math.max(1, math.ceil(vim.fn.strdisplaywidth(line) / width))
+      visual_rows = visual_rows + math.max(1, math.ceil(vim.fn.strdisplaywidth(line) / math.max(1, width - 2)))
     end
     local new_height = math.max(1, math.min(max_input_height, visual_rows))
-    local row = math.max(0, bottom_row() - new_height - 2)
+    local row = math.max(0, bottom_row() - new_height)
     vim.api.nvim_win_set_config(input_win, { relative = 'editor', row = row, col = col, width = width, height = new_height })
     if vim.api.nvim_win_is_valid(info_win) then
       vim.api.nvim_win_set_config(info_win, {
         relative = 'editor',
-        row = math.max(0, row - info_height - 2 - gap),
+        row = math.max(0, row - info_height),
         col = col,
         width = width,
       })
