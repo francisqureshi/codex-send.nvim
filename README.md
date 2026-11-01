@@ -23,8 +23,8 @@ With lazy.nvim:
   main = 'codex-send',
   cmd = { 'Codex', 'CodexSendSelection', 'CodexSessions', 'CodexTarget' },
   keys = {
-    { '<leader>ci', '<cmd>Codex<CR>', mode = 'n', desc = 'Send to Codex' },
-    { '<leader>ci', ':Codex<CR>', mode = 'x', desc = 'Send selection to Codex' },
+    { '<leader>cc', '<cmd>Codex<CR>', mode = 'n', desc = 'Send to Codex' },
+    { '<leader>cc', ':Codex<CR>', mode = 'x', desc = 'Send selection to Codex' },
     { '<leader>cs', ':CodexSendSelection<CR>', mode = 'x', desc = 'Send selection to Codex' },
     { '<leader>ct', '<cmd>CodexSessions<CR>', mode = { 'n', 'x' }, desc = 'Choose Codex thread' },
   },
@@ -46,8 +46,8 @@ Codex plugins, so enable only one provider for that command.
 
 | Key / command | Action |
 | --- | --- |
-| `<leader>ci` / `:Codex` | Open prompt with the current file path |
-| Visual `<leader>ci` or `<leader>cs` | Open prompt with the selected text |
+| `<leader>cc` / `:Codex` | Open prompt with the current file path |
+| Visual `<leader>cc` or `<leader>cs` | Open prompt with the selected text |
 | `<leader>ct` / `:CodexSessions` | Choose the target thread |
 | `:CodexTarget UUID-or-exact-name` | Set the target explicitly |
 | `:CodexTarget` | Show the current target |
