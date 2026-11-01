@@ -81,6 +81,8 @@ The picker reads the local
 updated first. This lists **saved threads**, not only live ones; it is not a
 complete server inventory. Enter a UUID or exact name manually if missing.
 
+The dialog sits at the bottom of the editor and grows upward as you type,
+keeping the code above visible. It follows editor resizing.
 The dialog shows the session name (falling back to its ID when unavailable) and
 source file. **Ctrl-T changes the target session inside the dialog**, preserving
 your prompt, selection, and buffer toggle. Canceling the picker keeps the previous

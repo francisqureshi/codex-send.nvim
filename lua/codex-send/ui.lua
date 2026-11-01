@@ -70,7 +70,10 @@ function M.open(opts)
   local info_height = opts.target_cwd and 4 or 3
   local max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 7))
   local gap = 0 -- no gap between bubbles
-  local top_row = math.floor((vim.o.lines - (info_height + 2 + gap + max_input_height + 2)) / 2)
+  local function bottom_row()
+    return vim.o.lines - vim.o.cmdheight - (vim.o.laststatus > 0 and 1 or 0)
+  end
+  local top_row = bottom_row() - (info_height + 2 + gap + 1 + 2)
   local col = math.floor((vim.o.columns - width - 2) / 2)
 
   -- Accent highlights
@@ -141,6 +144,9 @@ function M.open(opts)
     if not vim.api.nvim_win_is_valid(input_win) then
       return
     end
+    width = math.max(1, math.min(72, math.floor(vim.o.columns * 0.7)))
+    col = math.max(0, math.floor((vim.o.columns - width - 2) / 2))
+    max_input_height = math.max(1, math.min(6, vim.o.lines - info_height - 7))
     local lines = vim.api.nvim_buf_get_lines(input_buf, 0, -1, false)
     -- Count visual rows (each buffer line may wrap across multiple display rows)
     local visual_rows = 0
@@ -149,7 +155,16 @@ function M.open(opts)
       visual_rows = visual_rows + math.max(1, math.ceil(vim.fn.strdisplaywidth(line) / width))
     end
     local new_height = math.max(1, math.min(max_input_height, visual_rows))
-    vim.api.nvim_win_set_height(input_win, new_height)
+    local row = math.max(0, bottom_row() - new_height - 2)
+    vim.api.nvim_win_set_config(input_win, { relative = 'editor', row = row, col = col, width = width, height = new_height })
+    if vim.api.nvim_win_is_valid(info_win) then
+      vim.api.nvim_win_set_config(info_win, {
+        relative = 'editor',
+        row = math.max(0, row - info_height - 2 - gap),
+        col = col,
+        width = width,
+      })
+    end
     -- Scroll so the cursor line is always visible (bottom of window)
     local cursor_line = vim.api.nvim_win_get_cursor(input_win)[1]
     local top_line = math.max(1, cursor_line - new_height + 1)
@@ -297,6 +312,8 @@ function M.open(opts)
     buffer = input_buf,
     callback = resize_input,
   })
+
+  vim.api.nvim_create_autocmd('VimResized', { buffer = input_buf, callback = resize_input })
 
   vim.api.nvim_create_autocmd('BufLeave', {
     buffer = input_buf,
