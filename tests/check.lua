@@ -38,8 +38,12 @@ local ok, err = xpcall(function()
     '            assert request["params"]["archived"] is False',
     '            assert request["params"]["sortKey"] == "recency_at"',
     '            sessions = json.loads(pathlib.Path(__file__).with_suffix(".sessions.json").read_text())',
-    '            matches = [s for s in sessions if s["cwd"] in request["params"]["cwd"]]',
-    '            reply = {"id": 2, "result": {"data": matches}}',
+    '            paths = request["params"].get("cwd")',
+    '            matches = [s for s in sessions if not paths or s["cwd"] in paths]',
+    '            offset = int(request["params"].get("cursor", "0"))',
+    '            page = matches if paths else matches[offset:offset+2]',
+    '            cursor = str(offset+2) if not paths and offset+2 < len(matches) else None',
+    '            reply = {"id": 2, "result": {"data": page, "nextCursor": cursor}}',
     '        else:',
     '            assert request["method"] == "initialized"',
     '            continue',
@@ -81,8 +85,14 @@ local ok, err = xpcall(function()
     callback(nil)
   end
   local selected = false
+  local cancelled = false
   codex.select_thread(function()
     selected = true
+  end, function()
+    cancelled = true
+  end)
+  wait_for(function()
+    return cancelled
   end)
   assert(not selected)
   eq(codex.config.thread, 'chosen-thread')
@@ -170,6 +180,9 @@ local ok, err = xpcall(function()
     })
   end
   key '<C-T>'
+  wait_for(function()
+    return choose ~= nil
+  end)
   vim.wait(20, function()
     return false
   end)
@@ -182,10 +195,15 @@ local ok, err = xpcall(function()
   eq(codex.config.thread, 'new')
 
   -- Canceling a second picker keeps the chosen target and the prompt.
+  cancelled = false
   vim.ui.select = function(_, _, callback)
+    cancelled = true
     callback(nil)
   end
   key '<C-T>'
+  wait_for(function()
+    return cancelled
+  end)
   eq(codex.config.thread, 'new')
   eq(vim.api.nvim_get_current_buf(), draft)
   vim.ui.select = select
@@ -232,10 +250,37 @@ local ok, err = xpcall(function()
       { id = 'wrong-directory', cwd = cwd .. '-sibling', name = 'Wrong project' },
       { id = 'broader-project', cwd = vim.fs.dirname(cwd), name = 'Parent should lose to exact' },
       { id = 'other-directory', cwd = other, name = 'Other project' },
-      { id = 'auto-new', cwd = cwd, name = 'Recent project session' },
-      { id = 'auto-old', cwd = cwd, name = 'Older project session' },
+      { id = 'auto-new', cwd = cwd, name = 'Recent project session', updatedAt = 20 },
+      { id = 'auto-old', cwd = cwd, name = 'Older project session', updatedAt = 10 },
     },
   }, tmp .. '/fake.sessions.json')
+  -- The selector fetches every metadata page and searches cwd plus name, not UUID.
+  local picker_entries, picker_options
+  vim.ui.select = function(values, options, callback)
+    picker_entries, picker_options = values, options
+    callback(nil)
+  end
+  codex.select_thread()
+  wait_for(function()
+    return picker_entries ~= nil
+  end)
+  eq(#picker_entries, 6) -- five sessions across three fake protocol pages
+  local previous_cwd, matching_order = '', {}
+  for index, item in ipairs(picker_entries) do
+    if index > 1 then
+      local label = picker_options.format_item(item)
+      assert(label:find(item.cwd, 1, true))
+      assert(label:find(item.thread_name, 1, true))
+      assert(not label:find(item.id, 1, true), 'UUID should not be displayed or searched')
+      assert(item.cwd >= previous_cwd, 'Sessions must be grouped by cwd')
+      previous_cwd = item.cwd
+      if item.cwd == cwd then
+        table.insert(matching_order, item.id)
+      end
+    end
+  end
+  eq(matching_order, { 'auto-new', 'auto-old' })
+  vim.ui.select = select
   codex.config.thread = nil
   local function resolve()
     local target

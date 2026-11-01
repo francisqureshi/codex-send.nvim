@@ -1,6 +1,7 @@
 local M = {}
 
--- Query metadata only. Never resume a thread or start a model turn.
+-- Query metadata only. With no cwd, page through all selectable sessions.
+-- Never resume a thread or start a model turn.
 function M.list(config, cwd, callback)
   local argv = vim.deepcopy(config.cmd)
   if config.profile then
@@ -29,28 +30,36 @@ function M.list(config, cwd, callback)
       finish(tostring(err))
     end
   end
-  local directories = { cwd }
-  for parent in vim.fs.parents(cwd) do
-    table.insert(directories, parent)
+  local directories = {}
+  if cwd then
+    table.insert(directories, cwd)
+    for parent in vim.fs.parents(cwd) do
+      table.insert(directories, parent)
+    end
   end
+  local cursor, collected = nil, {}
   local directory_index = 0
   local function request_next()
     directory_index = directory_index + 1
     local directory = directories[directory_index]
-    if not directory then
+    if cwd and not directory then
       finish(nil, {})
       return
     end
-    local paths = { directory }
-    local real = vim.uv.fs_realpath(directory)
-    if real and real ~= directory then
-      table.insert(paths, real)
+    local paths
+    if directory then
+      paths = { directory }
+      local real = vim.uv.fs_realpath(directory)
+      if real and real ~= directory then
+        table.insert(paths, real)
+      end
     end
     write {
       id = 2,
       method = 'thread/list',
       params = {
         cwd = paths,
+        cursor = cursor,
         limit = 50,
         sortKey = 'recency_at',
         sortDirection = 'desc',
@@ -76,7 +85,16 @@ function M.list(config, cwd, callback)
       write { method = 'initialized' }
       request_next()
     elseif type(response.result) == 'table' and type(response.result.data) == 'table' then
-      if #response.result.data > 0 then
+      if not cwd then
+        vim.list_extend(collected, response.result.data)
+        local next_cursor = response.result.nextCursor
+        if type(next_cursor) == 'string' and next_cursor ~= '' and next_cursor ~= cursor then
+          cursor = next_cursor
+          request_next()
+        else
+          finish(nil, collected)
+        end
+      elseif #response.result.data > 0 then
         finish(nil, response.result.data)
       else
         request_next()

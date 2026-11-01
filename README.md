@@ -76,10 +76,17 @@ directory and uses
 `codex app-server` to read metadata only; it never resumes a thread or starts
 a model turn. Remote targets use manual selection.
 
-The picker reads the local
-`$CODEX_HOME/session_index.jsonl` title index (default `~/.codex`), most recently
-updated first. This lists **saved threads**, not only live ones; it is not a
-complete server inventory. Enter a UUID or exact name manually if missing.
+The selector fetches all pages of non-archived session metadata through
+`codex app-server`. Entries show **cwd · session name**, grouped by directory
+and ordered by recent activity within each group. The full directory path and
+session name are both part of the picker text, so searchable `vim.ui.select`
+providers (including Telescope UI Select) can filter on either. UUIDs are kept
+internally for precise targeting and aren't displayed in session entries.
+
+Names are supplemented from `$CODEX_HOME/session_index.jsonl` (default
+`~/.codex`). If metadata lookup fails, the selector falls back to this local
+title index and shows `(cwd unavailable)`. This lists **saved threads**, not
+only live ones. Enter a UUID or exact name manually if missing.
 
 The composer fills the editor horizontally with a borderless, subtly darker
 background at the bottom, growing upward as you type. Only the session name and
@@ -127,7 +134,7 @@ Use the lazy.nvim spec's `opts`, or pass this table to `setup()`:
 }
 ```
 
-Remote targets use manual entry rather than the local title index. The command
+Remote targets use manual entry rather than local session metadata. The command
 inherits the environment, including any remote authentication configuration
 supplied through `cmd` arguments. File references always refer to this machine;
 for a remote host use selections or the buffer toggle to include actual text.

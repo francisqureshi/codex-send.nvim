@@ -120,10 +120,6 @@ function M.resolve_target(callback)
 end
 
 function M.select_thread(callback, on_cancel)
-  local items = { { manual = true } }
-  if not M.config.remote then
-    vim.list_extend(items, M.sessions())
-  end
   local function select(target)
     if not target or vim.trim(target) == '' then
       if on_cancel then
@@ -137,26 +133,88 @@ function M.select_thread(callback, on_cancel)
       callback(M.config.thread)
     end
   end
-  vim.ui.select(items, {
-    prompt = 'Codex thread (saved sessions; choose your running thread):',
-    format_item = function(item)
+  local function show(sessions)
+    table.sort(sessions, function(a, b)
+      local ac, bc = a.cwd or '', b.cwd or ''
+      if ac ~= bc then
+        if ac == '' then
+          return false
+        end
+        if bc == '' then
+          return true
+        end
+        return ac < bc
+      end
+      local at, bt = a.recency or 0, b.recency or 0
+      if at ~= bt then
+        return at > bt
+      end
+      if (a.updated_at or '') ~= (b.updated_at or '') then
+        return (a.updated_at or '') > (b.updated_at or '')
+      end
+      return a.id < b.id
+    end)
+    local items = { { manual = true } }
+    vim.list_extend(items, sessions)
+    vim.ui.select(items, {
+      prompt = 'Codex sessions · grouped by directory · search name or cwd:',
+      format_item = function(item)
+        if item.manual then
+          return 'Enter session name or UUID…'
+        end
+        return string.format('%s  ·  %s', item.cwd or '(cwd unavailable)', item.thread_name or '(untitled)')
+      end,
+    }, function(item)
+      if not item then
+        if on_cancel then
+          on_cancel()
+        end
+        return
+      end
       if item.manual then
-        return 'Enter session UUID or exact name…'
+        vim.ui.input({ prompt = 'Codex session UUID or exact name: ' }, select)
+      else
+        select(item.id)
       end
-      return string.format('%s  [%s]  %s', item.thread_name or '(untitled)', item.id, item.updated_at or '')
-    end,
-  }, function(item)
-    if not item then
-      if on_cancel then
-        on_cancel()
-      end
+    end)
+  end
+  if M.config.remote then
+    show {}
+    return
+  end
+  require('codex-send.discovery').list(M.config, nil, function(err, sessions)
+    if err then
+      show(M.sessions())
       return
     end
-    if item.manual then
-      vim.ui.input({ prompt = 'Codex session UUID or exact name: ' }, select)
-    else
-      select(item.id)
+    local names = {}
+    for _, session in ipairs(M.sessions()) do
+      names[session.id] = session.thread_name
     end
+    local entries = {}
+    for _, session in ipairs(sessions or {}) do
+      if type(session.id) == 'string' then
+        local name = names[session.id]
+        if type(name) ~= 'string' or vim.trim(name) == '' then
+          name = session.name
+        end
+        if type(name) ~= 'string' or vim.trim(name) == '' then
+          name = session.preview
+        end
+        if type(name) ~= 'string' or vim.trim(name) == '' then
+          name = '(untitled)'
+        end
+        name = name:gsub('[\r\n]+', ' ')
+        thread_names[session.id] = name
+        table.insert(entries, {
+          id = session.id,
+          thread_name = name,
+          cwd = type(session.cwd) == 'string' and session.cwd or nil,
+          recency = type(session.recencyAt) == 'number' and session.recencyAt or (type(session.updatedAt) == 'number' and session.updatedAt or 0),
+        })
+      end
+    end
+    show(entries)
   end)
 end
 
