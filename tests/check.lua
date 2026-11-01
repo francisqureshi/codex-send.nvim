@@ -113,6 +113,52 @@ local ok, err = xpcall(function()
   assert(argv[5]:find('local', 1, true))
   assert(argv[5]:find('source.lua lines 1-1', 1, true))
 
+  -- Switching sessions through an asynchronous picker preserves the draft/selection.
+  codex.config.thread = 'chosen-thread'
+  codex.open(selection)
+  draft = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(draft, 0, -1, false, { 'Keep my prompt' })
+  local choose, items, picker_win, picker_buf
+  vim.ui.select = function(values, _, callback)
+    items, choose = values, callback
+    picker_buf = vim.api.nvim_create_buf(false, true)
+    picker_win = vim.api.nvim_open_win(picker_buf, true, {
+      relative = 'editor',
+      row = 0,
+      col = 0,
+      width = 20,
+      height = 2,
+    })
+  end
+  key '<C-T>'
+  vim.wait(20, function()
+    return false
+  end)
+  assert(vim.api.nvim_buf_is_valid(draft), 'Picker must not discard draft on BufLeave')
+  vim.api.nvim_win_close(picker_win, true)
+  vim.api.nvim_buf_delete(picker_buf, { force = true })
+  choose(items[2])
+  eq(vim.api.nvim_get_current_buf(), draft)
+  eq(vim.api.nvim_buf_get_lines(draft, 0, -1, false), { 'Keep my prompt' })
+  eq(codex.config.thread, 'new')
+
+  -- Canceling a second picker keeps the chosen target and the prompt.
+  vim.ui.select = function(_, _, callback)
+    callback(nil)
+  end
+  key '<C-T>'
+  eq(codex.config.thread, 'new')
+  eq(vim.api.nvim_get_current_buf(), draft)
+  vim.ui.select = select
+  key '<CR>'
+  wait_for(function()
+    return not vim.api.nvim_buf_is_valid(draft)
+  end)
+  argv = vim.json.decode(table.concat(vim.fn.readfile(tmp .. '/fake.json'), '\n'))
+  eq(argv[3], 'new')
+  assert(argv[5]:find('Keep my prompt', 1, true))
+  assert(argv[5]:find('source.lua lines 1-1', 1, true))
+
   -- Queue failure preserves the editable draft for retry.
   codex.config.thread = 'fail'
   codex.open()

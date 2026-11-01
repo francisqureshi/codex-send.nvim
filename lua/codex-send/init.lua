@@ -117,13 +117,16 @@ function M.resolve_target(callback)
   end)
 end
 
-function M.select_thread(callback)
+function M.select_thread(callback, on_cancel)
   local items = { { manual = true } }
   if not M.config.remote then
     vim.list_extend(items, M.sessions())
   end
   local function select(target)
     if not target or vim.trim(target) == '' then
+      if on_cancel then
+        on_cancel()
+      end
       return
     end
     M.config.thread = vim.trim(target)
@@ -142,6 +145,9 @@ function M.select_thread(callback)
     end,
   }, function(item)
     if not item then
+      if on_cancel then
+        on_cancel()
+      end
       return
     end
     if item.manual then

@@ -37,6 +37,7 @@ function M.open(opts)
   local codex = require 'codex-send'
   local selection = opts.selection
   local sending = false
+  local picking = false
   local source = opts.source
     or {
       file = vim.fn.expand '%:p',
@@ -101,7 +102,7 @@ function M.open(opts)
     col = col,
     style = 'minimal',
     border = 'rounded',
-    title = ' Codex ',
+    title = ' Codex | Ctrl-T: change session ',
     title_pos = 'center',
     zindex = 50,
     noautocmd = true,
@@ -197,7 +198,7 @@ function M.open(opts)
   end
 
   local function send()
-    if sending then
+    if sending or picking then
       return
     end
     local lines = vim.api.nvim_buf_get_lines(input_buf, 0, -1, false)
@@ -249,6 +250,34 @@ function M.open(opts)
 
   local kopts = { buffer = input_buf, noremap = true, silent = true }
 
+  vim.keymap.set({ 'i', 'n' }, '<C-t>', function()
+    if sending or picking then
+      return
+    end
+    picking = true
+    vim.cmd 'noautocmd stopinsert'
+    local function restore()
+      picking = false
+      if closed or not vim.api.nvim_win_is_valid(input_win) then
+        return
+      end
+      vim.api.nvim_set_current_win(input_win)
+      vim.cmd 'noautocmd startinsert!'
+    end
+    codex.select_thread(function(target)
+      if not closed then
+        opts.target = target
+        vim.bo[info_buf].modifiable = true
+        vim.api.nvim_buf_set_lines(info_buf, 0, 1, false, { ' Thread: ' .. codex.thread_label(target) })
+        if opts.target_cwd then
+          vim.api.nvim_buf_set_lines(info_buf, 3, 4, false, { ' Target pinned manually' })
+        end
+        vim.bo[info_buf].modifiable = false
+      end
+      restore()
+    end, restore)
+  end, kopts)
+
   vim.keymap.set('i', '<CR>', send, kopts)
   vim.keymap.set({ 'i', 'n' }, '<C-s>', send, kopts)
   vim.keymap.set('i', '<S-CR>', '<CR>', kopts)
@@ -269,9 +298,14 @@ function M.open(opts)
 
   vim.api.nvim_create_autocmd('BufLeave', {
     buffer = input_buf,
-    once = true,
     callback = function()
-      vim.schedule(close)
+      if not picking then
+        vim.schedule(function()
+          if not picking then
+            close()
+          end
+        end)
+      end
     end,
   })
 end

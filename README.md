@@ -82,7 +82,11 @@ updated first. This lists **saved threads**, not only live ones; it is not a
 complete server inventory. Enter a UUID or exact name manually if missing.
 
 The dialog shows the session name (falling back to its ID when unavailable) and
-source file. Enter or Ctrl-S queues the prompt;
+source file. **Ctrl-T changes the target session inside the dialog**, preserving
+your prompt, selection, and buffer toggle. Canceling the picker keeps the previous
+target. A manual choice pins the session; use `:CodexTarget auto` to unpin it.
+You can also choose a session before opening the dialog with `<leader>ct` or
+`:CodexSessions`. Enter or Ctrl-S queues the prompt;
 Shift-Enter inserts a newline when supported by your terminal. Tab toggles sending
 the entire buffer, including unsaved edits. Visual selections include the exact
 selected text with absolute file path and line numbers. Escape cancels. Failed
