@@ -51,9 +51,25 @@ Codex plugins, so enable only one provider for that command.
 | `<leader>ct` / `:CodexSessions` | Choose the target thread |
 | `:CodexTarget UUID-or-exact-name` | Set the target explicitly |
 | `:CodexTarget` | Show the current target |
+| `:CodexTarget auto` | Clear a pinned target and return to automatic selection |
 
-Choose a thread on first use; the target stays selected for this Neovim
-instance. No thread is chosen automatically. The picker reads the local
+By default, the plugin queries Codex's app-server for non-archived conversations
+whose working directory exactly matches Neovim's current directory (`:pwd`).
+It prefers the last successfully used session for that directory in this Neovim
+instance, then the most recently active matching session. Symbolic links are
+resolved when comparing paths. Subagent and batch-execution sessions are excluded.
+If no match is found, or metadata lookup fails, it opens the picker. It never
+automatically falls back to a conversation in another project.
+
+Choosing a thread with the picker or `:CodexTarget` pins it until you run
+`:CodexTarget auto` or restart Neovim. Automatic targets are recalculated each
+time the dialog opens, and stay fixed while you compose the prompt. An exact
+directory match is a heuristic, not a guarantee that a conversation is live.
+Automatic lookup examines up to 50 recent matching conversations and uses
+`codex app-server` to read metadata only; it never resumes a thread or starts
+a model turn. Remote targets use manual selection.
+
+The picker reads the local
 `$CODEX_HOME/session_index.jsonl` title index (default `~/.codex`), most recently
 updated first. This lists **saved threads**, not only live ones; it is not a
 complete server inventory. Enter a UUID or exact name manually if missing.
@@ -83,6 +99,7 @@ Use the lazy.nvim spec's `opts`, or pass this table to `setup()`:
   -- profile = 'work',
   -- remote = 'unix:///path/to/server.sock',
   resume = false, -- true adds --resume to try waking the selected thread
+  auto_target = true, -- false always asks you to choose unless a target is pinned
 }
 ```
 

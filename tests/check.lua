@@ -29,6 +29,22 @@ local ok, err = xpcall(function()
   local fake = tmp .. '/fake.py'
   vim.fn.writefile({
     'import json, pathlib, sys',
+    'if "app-server" in sys.argv:',
+    '    for line in sys.stdin:',
+    '        request = json.loads(line)',
+    '        if request["method"] == "initialize":',
+    '            reply = {"id": 1, "result": {}}',
+    '        elif request["method"] == "thread/list":',
+    '            assert request["params"]["archived"] is False',
+    '            assert request["params"]["sortKey"] == "recency_at"',
+    '            reply = {"id": 2, "result": {"data": json.loads(pathlib.Path(__file__).with_suffix(".sessions.json").read_text())}}',
+    '        else:',
+    '            assert request["method"] == "initialized"',
+    '            continue',
+    '        payload = json.dumps(reply) + "\\n"',
+    '        sys.stdout.write(payload[:8]); sys.stdout.flush()',
+    '        sys.stdout.write(payload[8:]); sys.stdout.flush()',
+    '    sys.exit(0)',
     'pathlib.Path(__file__).with_suffix(".json").write_text(json.dumps(sys.argv[1:]))',
     'if "fail" in sys.argv:',
     '    print("test queue failure", file=sys.stderr)',
@@ -119,6 +135,77 @@ local ok, err = xpcall(function()
   end)
   argv = vim.json.decode(table.concat(vim.fn.readfile(tmp .. '/fake.json'), '\n'))
   assert(argv[5]:find('local value = 42\nprint(value)', 1, true))
+
+  -- Real discovery protocol; only exact directory matches can become targets.
+  local cwd = vim.fn.getcwd()
+  local other = tmp .. '/other'
+  vim.fn.mkdir(other, 'p')
+  vim.fn.writefile(
+    {
+      vim.json.encode {
+        { id = 'wrong-directory', cwd = cwd .. '-sibling', name = 'Wrong project' },
+        { id = 'other-directory', cwd = other, name = 'Other project' },
+        { id = 'auto-new', cwd = cwd, name = 'Recent project session' },
+        { id = 'auto-old', cwd = cwd, name = 'Older project session' },
+      },
+    },
+    tmp .. '/fake.sessions.json'
+  )
+  codex.config.thread = nil
+  local function resolve()
+    local target
+    codex.resolve_target(function(value)
+      target = value
+    end)
+    wait_for(function()
+      return target ~= nil
+    end)
+    return target
+  end
+  eq(resolve(), 'auto-new')
+  eq(codex.thread_label 'auto-new', 'Recent project session')
+  assert(codex.config.thread == nil, 'Automatic targeting must not pin a thread')
+
+  complete = false
+  codex.send('Remember this target', function(failure)
+    assert(not failure, failure)
+    complete = true
+  end, 'auto-old')
+  wait_for(function()
+    return complete
+  end)
+  eq(resolve(), 'auto-old')
+
+  vim.cmd.cd(other)
+  eq(resolve(), 'other-directory')
+  vim.cmd.cd(cwd)
+  eq(resolve(), 'auto-old')
+  codex.config.thread = 'explicit-choice'
+  eq(resolve(), 'explicit-choice')
+  vim.cmd 'CodexTarget auto'
+  eq(resolve(), 'auto-old')
+
+  -- With no cwd match (or discovery failure), use the picker, never global latest.
+  local picked = 0
+  vim.ui.select = function(_, _, callback)
+    picked = picked + 1
+    callback(nil)
+  end
+  vim.fn.writefile({ '[]' }, tmp .. '/fake.sessions.json')
+  codex.resolve_target(function()
+    error 'Should not automatically choose a thread'
+  end)
+  wait_for(function()
+    return picked == 1
+  end)
+  vim.fn.delete(tmp .. '/fake.sessions.json')
+  codex.resolve_target(function()
+    error 'Discovery failure must not choose a thread'
+  end)
+  wait_for(function()
+    return picked == 2
+  end)
+  vim.ui.select = select
 end, debug.traceback)
 vim.fn.delete(tmp, 'rf')
 if not ok then

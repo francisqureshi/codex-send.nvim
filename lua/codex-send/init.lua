@@ -7,7 +7,11 @@ M.config = {
   remote = nil,
   profile = nil,
   resume = false,
+  auto_target = true,
 }
+
+local last_sent = {}
+local thread_names = {}
 
 local function notify(message, level)
   vim.notify(message, level or vim.log.levels.INFO, { title = 'Codex Send' })
@@ -49,8 +53,54 @@ function M.thread_label(target)
         return session.thread_name
       end
     end
+    if thread_names[target] then
+      return thread_names[target]
+    end
   end
   return target
+end
+
+function M.resolve_target(callback)
+  if M.config.thread then
+    callback(M.config.thread)
+    return
+  end
+  if not M.config.auto_target or M.config.remote then
+    M.select_thread(callback)
+    return
+  end
+  local cwd = vim.fn.getcwd()
+  local pinned = M.config.thread
+  require('codex-send.discovery').list(M.config, cwd, function(err, sessions)
+    -- Don't switch context underneath a directory change or a manual choice.
+    if vim.fn.getcwd() ~= cwd or M.config.thread ~= pinned then
+      return
+    end
+    local candidates = {}
+    if not err then
+      local real = vim.uv.fs_realpath(cwd) or vim.fs.normalize(cwd)
+      for _, session in ipairs(sessions or {}) do
+        if type(session.id) == 'string' and type(session.cwd) == 'string' and (vim.uv.fs_realpath(session.cwd) or vim.fs.normalize(session.cwd)) == real then
+          table.insert(candidates, session)
+          if type(session.name) == 'string' and vim.trim(session.name) ~= '' then
+            thread_names[session.id] = session.name
+          end
+        end
+      end
+    end
+    if #candidates == 0 then
+      M.select_thread(callback)
+      return
+    end
+    local target = candidates[1].id
+    for _, session in ipairs(candidates) do
+      if session.id == last_sent[cwd] then
+        target = session.id
+        break
+      end
+    end
+    callback(target)
+  end)
 end
 
 function M.select_thread(callback)
@@ -96,11 +146,12 @@ function M.send(message, callback, target)
   end
   target = target or M.config.thread
   if not target then
-    M.select_thread(function(thread)
+    M.resolve_target(function(thread)
       M.send(message, callback, thread)
     end)
     return
   end
+  local cwd = vim.fn.getcwd()
   local argv = vim.deepcopy(M.config.cmd)
   vim.list_extend(argv, { 'queue', '--thread', target, '--message', message })
   if M.config.remote then
@@ -126,6 +177,7 @@ function M.send(message, callback, target)
         return
       end
       -- Successful queueing isn't a guarantee that the thread has consumed it.
+      last_sent[cwd] = target
       notify('Queued for ' .. target)
       local warning = vim.trim(result.stderr or '')
       if warning ~= '' then
@@ -150,11 +202,7 @@ function M.open(selection)
   local function open(target)
     require('codex-send.ui').open { selection = selection, target = target, source = source }
   end
-  if M.config.thread then
-    open(M.config.thread)
-  else
-    M.select_thread(open)
-  end
+  M.resolve_target(open)
 end
 
 function M.setup(opts)
@@ -175,8 +223,14 @@ function M.setup(opts)
     M.select_thread()
   end, { desc = 'Choose a Codex thread' })
   vim.api.nvim_create_user_command('CodexTarget', function(args)
-    if args.args == '' then
-      notify(M.config.thread and ('Target: ' .. M.config.thread) or 'No target selected; use :CodexSessions')
+    if args.args == 'auto' then
+      M.config.thread = nil
+      M.config.auto_target = true
+      notify 'Automatic targeting enabled'
+    elseif args.args == '' then
+      M.resolve_target(function(target)
+        notify('Target: ' .. M.thread_label(target))
+      end)
     else
       M.config.thread = vim.trim(args.args)
       notify('Target: ' .. M.config.thread)
