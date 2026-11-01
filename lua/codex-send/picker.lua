@@ -69,7 +69,7 @@ function M.show(items, callback)
             if picker and picker.results_win and vim.api.nvim_win_is_valid(picker.results_win) then
               available = math.max(1, vim.api.nvim_win_get_width(picker.results_win) - 4)
             end
-            local cap = math.max(1, math.floor(math.min(vim.o.columns, available) * 0.6))
+            local cap = math.max(1, math.floor(math.min(vim.o.columns, available) * 0.4))
             local path = M.path_label(item.cwd, cap)
             local padding = string.rep(' ', math.max(0, cap - vim.fn.strdisplaywidth(path)))
             local prefix = path .. padding .. '  ·  '
