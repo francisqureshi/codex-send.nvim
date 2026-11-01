@@ -140,17 +140,14 @@ local ok, err = xpcall(function()
   local cwd = vim.fn.getcwd()
   local other = tmp .. '/other'
   vim.fn.mkdir(other, 'p')
-  vim.fn.writefile(
-    {
-      vim.json.encode {
-        { id = 'wrong-directory', cwd = cwd .. '-sibling', name = 'Wrong project' },
-        { id = 'other-directory', cwd = other, name = 'Other project' },
-        { id = 'auto-new', cwd = cwd, name = 'Recent project session' },
-        { id = 'auto-old', cwd = cwd, name = 'Older project session' },
-      },
+  vim.fn.writefile({
+    vim.json.encode {
+      { id = 'wrong-directory', cwd = cwd .. '-sibling', name = 'Wrong project' },
+      { id = 'other-directory', cwd = other, name = 'Other project' },
+      { id = 'auto-new', cwd = cwd, name = 'Recent project session' },
+      { id = 'auto-old', cwd = cwd, name = 'Older project session' },
     },
-    tmp .. '/fake.sessions.json'
-  )
+  }, tmp .. '/fake.sessions.json')
   codex.config.thread = nil
   local function resolve()
     local target
