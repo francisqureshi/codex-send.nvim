@@ -26,7 +26,7 @@ With lazy.nvim:
     { '<leader>ci', '<cmd>Codex<CR>', mode = 'n', desc = 'Send to Codex' },
     { '<leader>ci', ':Codex<CR>', mode = 'x', desc = 'Send selection to Codex' },
     { '<leader>cs', ':CodexSendSelection<CR>', mode = 'x', desc = 'Send selection to Codex' },
-    { '<leader>ct', '<cmd>CodexSessions<CR>', desc = 'Choose Codex thread' },
+    { '<leader>ct', '<cmd>CodexSessions<CR>', mode = { 'n', 'x' }, desc = 'Choose Codex thread' },
   },
   opts = {},
 }
