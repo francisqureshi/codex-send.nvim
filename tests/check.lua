@@ -99,6 +99,27 @@ local ok, err = xpcall(function()
   eq(selection.text, 'local')
   eq(selection.file, tmp .. '/source.lua')
 
+  -- Long metadata must not wrap and push the Ctrl-T hint below the panel.
+  ui.open {
+    target = 'chosen-thread',
+    target_cwd = tmp,
+    source = { buf = vim.api.nvim_get_current_buf(), file = string.rep('a', 200), ft = 'lua', lines = { '' } },
+  }
+  vim.cmd 'redraw'
+  local hint_visible = false
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_config(win).focusable == false then
+      local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+      for row, line in ipairs(lines) do
+        if line == ' Ctrl-T: change session' then
+          hint_visible = vim.fn.screenpos(win, row, 1).row > 0
+        end
+      end
+    end
+  end
+  assert(hint_visible, 'Long file path hides the Ctrl-T hint')
+  key '<Esc>'
+
   -- A dialog pins its target, even if the global target changes before submit.
   codex.open(selection)
   local draft = vim.api.nvim_get_current_buf()

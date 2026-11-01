@@ -111,6 +111,8 @@ function M.open(opts)
   })
   vim.wo[info_win].winhl = 'NormalFloat:Normal,FloatBorder:CodexSendBorder,FloatTitle:CodexSendTitle'
   vim.wo[info_win].cursorline = false
+  -- Keep one display row per field so long paths/titles cannot hide the hint.
+  vim.wo[info_win].wrap = false
 
   -- Bottom bubble: prompt input
   local input_buf = vim.api.nvim_create_buf(false, true)
