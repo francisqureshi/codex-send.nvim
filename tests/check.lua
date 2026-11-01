@@ -117,11 +117,11 @@ local ok, err = xpcall(function()
         end
       end
     elseif vim.bo[vim.api.nvim_win_get_buf(win)].filetype == 'codex-send-prompt' then
-      shortcuts_visible = vim.inspect(config.title):find 'Ctrl%-T: change session' ~= nil and vim.inspect(config.footer):find 'Shift%-Enter: newline' ~= nil
+      shortcuts_visible = vim.inspect(config.title):find 'Ctrl%-T: change session' ~= nil and config.footer == nil
     end
   end
   assert(metadata_visible, 'Long file path hides session metadata')
-  assert(shortcuts_visible, 'Prompt border must show session and newline shortcuts')
+  assert(shortcuts_visible, 'Prompt border must show session shortcut without a footer')
   key '<Esc>'
 
   -- A dialog pins its target, even if the global target changes before submit.

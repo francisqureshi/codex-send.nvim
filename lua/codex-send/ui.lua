@@ -130,8 +130,6 @@ function M.open(opts)
     border = 'rounded',
     title = ' Enter: send | Ctrl-T: change session ',
     title_pos = 'center',
-    footer = ' Shift-Enter: newline | Esc: cancel ',
-    footer_pos = 'center',
     zindex = 50,
     noautocmd = true,
   })
